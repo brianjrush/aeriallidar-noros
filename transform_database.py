@@ -7,17 +7,31 @@ from transform import Transform
 from math import radians
 
 class TransformDatabase():
-  def __init__(self, tf_file):
+  def __init__(self, csv=None, npy=None):
     self.stamps = None
     self.transforms = None
-    self.read_transforms(tf_file)
+    if csv is not None:
+      self.read_transforms_from_csv(csv)
+    elif npy is not None:
+      self.read_stamps_from_npy(npy[0])
+      self.read_transforms_from_npy(npy[1])
 
-  def read_transforms(self, tf_file):
+  def write_to(self, stamp_path, tf_path):
+    np.save(stamp_path, self.stamps)
+    np.save(tf_path, self.transforms)
+
+  def read_transforms_from_npy(self, npy):
+    self.transforms = np.load(npy)
+
+  def read_stamps_from_npy(self, stamps):
+    self.stamps = np.load(stamps)
+
+  def read_transforms_from_csv(self, tf_file):
     ''' Data needed:
       [stamp], [x], [y], [z], [qx], [qy], [qz], [qw]
     '''
     #print("Reading transforms from %s" % tf_file)
-    self.transforms = []
+    tfs = []
     stamps = []
     f = open(tf_file)
     for line in f:
@@ -31,9 +45,10 @@ class TransformDatabase():
       qz = float(fields[6])
       qw = float(fields[7])
       stamps.append(stamp)
-      self.transforms.append(Transform(stamp, x, y, z, qx, qy, qz, qw))
+      tfs.append(Transform(stamp, x, y, z, qx, qy, qz, qw))
     f.close()
     self.stamps = np.array(stamps)
+    self.transforms = np.array(tfs)
     #print("Successfully read %d transforms" % len(self.transforms))
 
   def lookup_transform(self, time):

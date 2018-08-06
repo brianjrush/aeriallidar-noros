@@ -1,14 +1,12 @@
 #!/usr/bin/env python3
 
 from utils import gps2utc
-import sys
 import quaternion
 from math import radians
 import utm
 
-def convert_dataflash_to_csv(dataflash_file, outfile, pos='NKF'):
+def convert_dataflash_to_csv(dataflash_file, outfile, pos='nkf'):
   from pymavlink import mavutil
-  print("Current implementation only reads position and attitude from EKF")
   print("Openning log file %s" % dataflash_file)
   mavmaster = mavutil.mavlink_connection(dataflash_file)
 
@@ -26,7 +24,7 @@ def convert_dataflash_to_csv(dataflash_file, outfile, pos='NKF'):
   while mavmsg is not None:
     msg_type = mavmsg.get_type()
     msg = mavmsg.to_dict()
-    print(msg_type)
+    #print(msg_type)
     if boot_time != -1:
       if msg_type == 'NKF1':
         stamp = boot_time + msg['TimeUS'] / 1000000.
@@ -74,11 +72,13 @@ def convert_dataflash_to_csv(dataflash_file, outfile, pos='NKF'):
   f.close()
 
 if __name__ == '__main__':
+  import sys
   if len(sys.argv) < 3:
-    print("Too few arguments. Usage: %s [dataflash log] [output csv]" % sys.argv[0], file=sys.stderr)
+    print("Too few arguments. Usage: %s dataflash_log output_csv [nkf | gps]" % sys.argv[0], file=sys.stderr)
     sys.exit(1)
   if len(sys.argv) > 3:
     pos_type = sys.argv[3]
   else:
     pos_type = 'gps'
+  print("Using %s positioning" % pos_type)
   convert_dataflash_to_csv(sys.argv[1], sys.argv[2], pos=pos_type)

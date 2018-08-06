@@ -9,7 +9,6 @@ class PLYParseError(Exception):
   pass
 
 def read(infile):
-  # VERY basic parser. Assumes only vertices, does not check count, and all properties must be of the form 'property type name'
   malformed = True
 
   f = open(infile, 'rb')
@@ -98,10 +97,11 @@ def read(infile):
 
   f.seek(vertices['seek_position'])
   stop = vertices['seek_position'] + (vertex_parser.size * vertices['length'])
+  current = f.tell()
   data = f.read(vertex_parser.size)
   count = 1
   cloud = pointcloud.PointCloud()
-  while f.tell() <= stop and len(data) == vertex_parser.size:
+  while current <= stop and len(data) == vertex_parser.size:
     fields = vertex_parser.unpack(data)
     count+=1
     try:
@@ -116,7 +116,7 @@ def read(infile):
         
     except KeyError:
       raise PLYParseError("Unable to parse binary data with format string %s" % struct_format)
-
+    current += vertex_parser.size
     data = f.read(vertex_parser.size)
   if has_timestamp:
     # add timestamp to cloud

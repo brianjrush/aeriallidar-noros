@@ -1,9 +1,7 @@
 #!/usr/bin/python3
-import sys
-sys.path.append('..')
 from transform_database import TransformDatabase
 from transform import Transform
-import ply_formatter
+import ply_formatter as ply_formatter
 from pointcloud import PointCloud
 import numpy as np
 from point import Point
@@ -25,6 +23,7 @@ def transform_cloud(cloud, tf):
   return transformed_cloud
 
 def rotate_point(p, q):
+  # rotate point as per voodoo magic found here: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
   u = q[:3] # extract q.x, q.y, and q.z
   s = q[3] # q.w
   transformed = 2. * np.dot(u, p) * u \
@@ -33,14 +32,14 @@ def rotate_point(p, q):
   return transformed
 
 def transform_point(point, tf):
-  # first rotate point as per voodoo magic found here: https://gamedev.stackexchange.com/questions/28395/rotating-vector3-by-a-quaternion
-
   # rotate by fixed transform
-  fixed_tf = np.array([0.707, 0, -0.707, 0])
-  transformed = rotate_point(point.position, fixed_tf)
+  #fixed_tf = np.array([0.707, 0, -0.707, 0])
+  #transformed = rotate_point(point.position, fixed_tf)
 
-  fixed_tf = np.array([0,0,1,0])
-  transformed = rotate_point(transformed, fixed_tf)
+  #fixed_tf = np.array([0,0,1,0])
+  #transformed = rotate_point(transformed, fixed_tf)
+  fixed_tf = np.array([0,.707,0,-.707])
+  transformed = rotate_point(point.position, fixed_tf)
 
   # rotate by tf rotation
   transformed = rotate_point(transformed, tf.rotation)
@@ -51,14 +50,16 @@ def transform_point(point, tf):
   return transformed_point
 
 if __name__ == '__main__':
-  if len(sys.argv) < 4:
-    print('Not enough arguments. Usage: %s [pointcloud.ply] [ins.csv] [output.ply]' % sys.argv[0])
+  import sys
+  if len(sys.argv) < 5:
+    print('Not enough arguments. Usage: %s [pointcloud.ply] [stamps.npy] [tfs.npy] [output.ply]' % sys.argv[0])
     sys.exit(1)
   path = sys.argv[1]
-  ins_file = sys.argv[2]
-  out_file = sys.argv[3]
+  stamps = sys.argv[2]
+  tfs = sys.argv[3]
+  out_file = sys.argv[4]
   cloud = ply_formatter.read(path)
-  tfs = TransformDatabase(ins_file)
+  tfs = TransformDatabase(npy=(stamps,tfs))
   transformed_cloud = transform(tfs, cloud)
   if transformed_cloud is not None:
     ply_formatter.write(transformed_cloud, out_file)

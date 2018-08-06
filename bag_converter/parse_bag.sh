@@ -27,6 +27,6 @@ rm orientation
 rm position
 
 echo "Combining files..."
-python3 combine_csv.py orientation.csv position.csv "$dir"
+python3 combine_att_pos_csv.py orientation.csv position.csv "$dir"
 rm orientation.csv
 rm position.csv

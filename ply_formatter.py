@@ -2,36 +2,36 @@
 
 import struct
 import pointcloud
-import point
 from math import isnan
-
-class PLYParseError(Exception):
-  pass
 
 def read(infile):
   malformed = True
 
-  f = open(infile, 'rb')
+  ply_types = {'float' : 'f',
+               'uchar' : 'B',
+               'char'  : 'c',
+               'short' : 'h',
+               'ushort': 'H',
+               'int'   : 'i',
+               'uint'  : 'I',
+               'double': 'd'};
 
-  line = f.readline().decode().strip()
-  if line == 'ply':
-    # first line is always ply
-    fmt = f.readline().decode().strip().split(' ')
-    # fmt line can be either format ascii 1.0
-    #                        format binary_little_endian 1.0
-    #                        format binary_big_endian 1.0
-    if len(fmt) == 3 and fmt[0] == 'format' and fmt[2] == '1.0':
-      if fmt[1] == 'ascii':
-        raise NotImplementedError("ASCII PLY files currently not implemented")
-      elif fmt[1] == "binary_little_endian":
-        endian = "<"
-        malformed = False
-      elif fmt[1] == "binary_big_endian":
-        endian = ">"
-        malformed = False
+  valid_fmt = {'binary_little_endian' : '<',
+               'binary_big_endian'    : '>'}
+  #            ascii unsupported
 
-  if malformed:
-    raise PLYParseError("Malformed format specification")
+  with open(infile, 'rb') as f:
+    lines = f.readlines()
+
+  if b'ply' not in lines[0]:
+    raise ValueError("Not a valid PLY file (1st line is not 'ply'")
+  try:
+    endian = valid_fmt[lines[1].decode().split(' ')[1]] # lines[1] should be 'format binary_little_endian|binary_big_endian 1.0'
+  except KeyError as e:
+    print('Invalid or unsupported format type %s' % e)
+  
+  line_number = 2
+  line = lines[line_number]
 
   elements = []
   data_indices = {}
@@ -40,7 +40,8 @@ def read(infile):
   struct_format = endian
   i=0
 
-  line = f.readline().decode().strip()
+  line = lines[line_number].decode().strip()
+  line_number+=1
   while line != 'end_header':
     fields = line.split(' ')
     if fields[0] == 'element' and len(fields) == 3:
@@ -53,52 +54,36 @@ def read(infile):
       struct_format = endian
       current_element = fields[1]
     elif fields[0] == 'property' and len(fields) == 3:
-      if fields[1] == 'float':
-        struct_format += 'f'
-      elif fields[1] == 'uchar':
-        struct_format += 'B'
-      elif fields[1] == 'char':
-        struct_format += 'c'
-      elif fields[1] == 'short':
-        struct_format += 'h'
-      elif fields[1] == 'ushort':
-        struct_format += 'H'
-      elif fields[1] == 'int':
-        struct_format += 'i'
-      elif fields[1] == 'uint':
-        struct_format += 'I'
-      elif fields[1] == 'double':
-        struct_format += 'd'
-      else:
-        raise PLYParseError("Unable to parse line '%s'" % line)
+      struct_format += ply_types[fields[1]]
       data_indices[fields[2]] = i
       i+=1
-    line = f.readline().decode().strip()
+    line = lines[line_number].decode().strip()
+    line_number+=1
   data_indices['type'] = current_element
   data_indices['format'] = struct_format
   if current_element is not None:
     elements.append(data_indices)
 
   # skip data before vertex elements we don't care about
+  bin_data = b''.join(lines[line_number:])
   offset = 0
   has_timestamp = False
-  end_of_header = f.tell()
   for element in elements:
     if element['type'] == 'vertex':
       vertices = element
-      vertices['seek_position'] = end_of_header + offset
+      vertices['seek_position'] = offset
       vertex_parser = struct.Struct(vertices['format'])
     elif element['type'] == 'timestamp':
       has_timestamp = True
       timestamp = element
-      timestamp['seek_position'] = end_of_header + offset
+      timestamp['seek_position'] = offset
       timestamp_parser = struct.Struct(timestamp['format'])
     offset += struct.calcsize(element['format']) * element['length']
 
-  f.seek(vertices['seek_position'])
+  start = vertices['seek_position']
   stop = vertices['seek_position'] + (vertex_parser.size * vertices['length'])
-  current = f.tell()
-  data = f.read(vertex_parser.size)
+  current = start
+  data = bin_data[start:start+vertex_parser.size]
   count = 1
   cloud = pointcloud.PointCloud()
   while current <= stop and len(data) == vertex_parser.size:
@@ -112,17 +97,16 @@ def read(infile):
       g = fields[vertices['green']]
       b = fields[vertices['blue']]
       if not isnan(x) and not isnan(y) and not isnan(z):
-        cloud += point.Point(x,y,z,r,g,b)
+        cloud += pointcloud.Point(x,y,z,r,g,b)
         
     except KeyError:
       raise PLYParseError("Unable to parse binary data with format string %s" % struct_format)
     current += vertex_parser.size
-    data = f.read(vertex_parser.size)
+    data = bin_data[current:current+vertex_parser.size]
   if has_timestamp:
     # add timestamp to cloud
-    f.seek(timestamp['seek_position'])
-    
-    fields = timestamp_parser.unpack(f.read(timestamp_parser.size))
+    start = timestamp['seek_position']
+    fields = timestamp_parser.unpack(bin_data[start:start+timestamp_parser.size])
     cloud.stamp = fields[0]
   return cloud
 
@@ -156,3 +140,6 @@ def write(cloud, outfile):
   if cloud.stamp != -1:
     f.write(struct.pack("<d", cloud.stamp))
   f.close()
+
+if __name__ == '__main__':
+  read('/home/e4e/data-2018-08-01/clouds/00044.ply')

@@ -4,19 +4,16 @@ from pointcloud import PointCloud
 
 class PointCloudDatabase():
   def __init__(self, clouds=[], infiles=None):
-    self.clouds = clouds
     if infiles is not None:
       print("Reading points from ply files")
       self.read_plys(infiles)
+    self.clouds.extend(clouds)
 
   def read_plys(self, infiles):
-    if isinstance(infiles,list):
-      for f in infiles:
-        c = PointCloud(ply=f)
-        self.clouds.append(c)
-    else:
-      c = PointCloud(ply=f)
-      self.clouds.append(c)
+    self.clouds = [None]*len(infiles)
+    for i in range(len(infiles)):
+      c = PointCloud(ply=infiles[i])
+      self.clouds[i] = c
 
   def write_plys(self, prefix=""):
     count = 0
@@ -28,10 +25,9 @@ class PointCloudDatabase():
     return iter(self.clouds)
   def __add__(self, other):
     if isinstance(other, self.__class__):
-      return PointCloudDatabase(clouds=self.clouds + other.clouds)
+      self.clouds.extend(other.clouds)
     elif isinstance(other, PointCloud):
-      clouds = self.clouds[:]
       clouds.append(other)
-      return PointCloudDatabase(clouds=clouds)
     else:
       raise TypeError("Unsupported operand type(s) for +: '%s' and '%s'" % (self.__class__, type(other)))
+    return self

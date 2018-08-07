@@ -18,7 +18,7 @@ def convert_dataflash_to_csv(dataflash_file, outfile, pos='nkf'):
 
   # drop all data prior to first GPS message to sync boot time
   boot_time = -1
-
+  home = {}
   latest_q = None
 
   while mavmsg is not None:
@@ -42,12 +42,18 @@ def convert_dataflash_to_csv(dataflash_file, outfile, pos='nkf'):
         if pos == 'nkf':
           line = ('%f,%f,%f,%f,%f,%f,%f,%f\n') % (stamp, x, y, z, latest_q.x, latest_q.y, latest_q.z, latest_q.w)
           f.write(line)
-      elif pos=='gps' and msg_type == 'GPS':
+      elif pos=='gps' and msg_type == 'GPS' and msg['Status'] >= 3:
         stamp = gps2utc(msg['GMS']/1000., msg['GWk'])
         utm_pos = utm.from_latlon(msg['Lat'], msg['Lng'])
-        x = utm_pos[1]
-        y = utm_pos[0]
-        z = -msg['Alt']
+
+        if home == {}:
+          home['x'] = utm_pos[1]
+          home['y'] = utm_pos[0]
+          home['z'] = -msg['Alt']
+
+        #x = utm_pos[1] - home['x']
+        #y = utm_pos[0] - home['y']
+        z = -msg['Alt']# - home['z']
         if latest_q is not None:
           line = ('%f,%f,%f,%f,%f,%f,%f,%f\n') % (stamp, x, y, z, latest_q.x, latest_q.y, latest_q.z, latest_q.w)
           latest_q = None
@@ -79,6 +85,6 @@ if __name__ == '__main__':
   if len(sys.argv) > 3:
     pos_type = sys.argv[3]
   else:
-    pos_type = 'gps'
+    pos_type = 'nkf'
   print("Using %s positioning" % pos_type)
   convert_dataflash_to_csv(sys.argv[1], sys.argv[2], pos=pos_type)

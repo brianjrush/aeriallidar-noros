@@ -4,7 +4,7 @@ import struct
 import pointcloud
 from math import isnan
 
-def read(infile):
+def read(infile, min_rgb=0):
   malformed = True
 
   ply_types = {'float' : 'f',
@@ -84,25 +84,28 @@ def read(infile):
   stop = vertices['seek_position'] + (vertex_parser.size * vertices['length'])
   current = start
   data = bin_data[start:start+vertex_parser.size]
-  count = 1
-  cloud = pointcloud.PointCloud()
+  count = 0
+  points = [None] * (vertices['length'] // 10)
   while current <= stop and len(data) == vertex_parser.size:
     fields = vertex_parser.unpack(data)
-    count+=1
     try:
       x = fields[vertices['x']]
       y = fields[vertices['y']]
       z = fields[vertices['z']]
-      r = fields[vertices['red']]
-      g = fields[vertices['green']]
-      b = fields[vertices['blue']]
+      r = max(fields[vertices['red']], min_rgb)
+      g = max(fields[vertices['green']], min_rgb)
+      b = max(fields[vertices['blue']], min_rgb)
       if not isnan(x) and not isnan(y) and not isnan(z):
-        cloud += pointcloud.Point(x,y,z,r,g,b)
-        
+        if count >= len(points):
+          points.extend([None] * (vertices['length'] // 10))
+        points[count] = pointcloud.Point(x,y,z,r,g,b)
+        count += 1
     except KeyError:
       raise PLYParseError("Unable to parse binary data with format string %s" % struct_format)
     current += vertex_parser.size
     data = bin_data[current:current+vertex_parser.size]
+  points = points[:count]
+  cloud = pointcloud.PointCloud(points=points)
   if has_timestamp:
     # add timestamp to cloud
     start = timestamp['seek_position']

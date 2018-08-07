@@ -7,7 +7,7 @@ usage() {
   echo "Usage: `basename "$0"` [options] dataflash_log output_dir cloud1.ply cloud2.ply..."
   echo " -d  delete clouds from RAM after processing"
   echo " -h  display this message"
-  echo " -j  the number of jobs to run"
+  echo " -j  the number of jobs to run (BROKEN)"
   echo " -r  load all clouds into RAM"
 }
 
@@ -39,28 +39,28 @@ stampsnpy="$TMPDIR/stamp.npy"
 csv="$TMPDIR/tf.csv"
 
 echo "Parsing transforms from $dataflash_log"
-python3 dataflash_converter.py "$dataflash_log" "$csv"
+python3 dataflash_converter.py "$dataflash_log" "$csv" 'nkf'
 python3 csv_to_npy.py "$csv" "$stampsnpy" "$tfnpy"
 echo "Done parsing transforms"
 
 if $load_to_ram; then
   echo "Loading clouds into RAM..."
   mkdir -p "$TMPDIR/clouds"
-  count=1
+  count=0
   for file in "$@"; do
 	cp "$file" "$TMPDIR/clouds/"
-	count=$(($count+1))
 	if [ $(($count%500)) -eq 0 ]; then echo "$count/$# files moved"; fi
+	count=$(($count+1))
   done
   echo "$count/$# files moved"
   echo "Done"
 fi
 
-echo "Transforming clouds with $j jobs"
+echo "Transforming clouds with 8 jobs"
 if $load_to_ram; then
-  parallel -j "$j" python3 pointcloud_transformer_parallel.py {} "$stampsnpy" "$tfnpy" "$outdir/{/}" ::: $TMPDIR/clouds/*
+  python3 pointcloud_transformer_parallel.py "$outdir" "$stampsnpy" "$tfnpy" $TMPDIR/clouds/*
 else
-  parallel -j "$j" python3 pointcloud_transformer_parallel.py {} "$stampsnpy" "$tfnpy" "$outdir/{/}" ::: "$@"
+  python3 pointcloud_transformer_parallel.py "$outdir" "$stampsnpy" "$tfnpy" "$@"
 fi
 if $del; then rm -r "$TMPDIR"; fi
 echo "Done"

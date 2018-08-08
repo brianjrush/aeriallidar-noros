@@ -10,6 +10,7 @@ from point import Point
 output_dir = ''
 stamp_file = None
 tf_file = None
+tf_db = None
 
 def transform(tfs, cloud):
   tf, error = tfs.lookup_transform(cloud.stamp)
@@ -56,8 +57,7 @@ def transform_point(point, tf):
 
 def run_file(f):
   cloud = ply_formatter.read(f, min_rgb=5)
-  tfs = TransformDatabase(npy=(stamp_file,tf_file))
-  transformed_cloud = transform(tfs, cloud)
+  transformed_cloud = transform(tf_db, cloud)
   if transformed_cloud is not None and transformed_cloud.size() is not 0:
     outfile = os.path.join(output_dir, os.path.basename(f))
     ply_formatter.write(transformed_cloud, outfile)
@@ -73,14 +73,17 @@ if __name__ == '__main__':
   stamp_file = sys.argv[2]
   tf_file = sys.argv[3]
   total_args = len(sys.argv) - 4
+  tf_db = TransformDatabase(npy=(stamp_file,tf_file))
 
   pool = Pool(processes=8)
-
-  import time
-  start_time = time.time()
-  for i,_ in enumerate(pool.imap_unordered(run_file, sys.argv[4:]), 1):
-    if i % 500 == 0 and i != 0:
-      sys.stdout.write(" - %.2f seconds elapsed\n" % (time.time() - start_time))
-      start_time = time.time()
-    sys.stdout.write("\rTransformed %d/%d files" % (i, total_args))
-  print("Done.")
+  run_file(sys.argv[4])
+  run_file(sys.argv[5])
+  run_file(sys.argv[6])
+#  import time
+#  start_time = time.time()
+#  for i,_ in enumerate(pool.imap_unordered(run_file, sys.argv[4:]), 1):
+#    if i % 500 == 0 and i != 0:
+#      sys.stdout.write(" - %.2f seconds elapsed\n" % (time.time() - start_time))
+#      start_time = time.time()
+#    sys.stdout.write("\rTransformed %d/%d files" % (i, total_args))
+#  print("Done.")

@@ -27,11 +27,10 @@ class PointCloud():
 
   def __add__(self, other):
     if isinstance(other, self.__class__):
-      return PointCloud(points=self.points+other.points)
+      self.points.extend(other.points)
     elif isinstance(other, Point):
-      points = self.points[:]
-      points.append(other)
-      return PointCloud(points=points)
+      self.points.append(other)
     else:
       raise TypeError("Unsupported operand type(s) for +: '%s' and '%s'" % (self.__class__, type(other)))
+    return self
 

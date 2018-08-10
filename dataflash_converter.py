@@ -38,9 +38,10 @@ def convert_dataflash_to_csv(dataflash_file, outfile, pos='nkf'):
         yaw_rad = radians(msg['Yaw'])
         pitch_rad = radians(msg['Pitch'])
         roll_rad = radians(msg['Roll'])
-        latest_q = quaternion.from_euler_angles(roll_rad, pitch_rad, yaw_rad)
+        #latest_q = quaternion.from_euler_angles(roll_rad, pitch_rad, yaw_rad)
+        latest_q = quaternion.from_euler_angles(yaw_rad, pitch_rad, roll_rad)
         if pos == 'nkf':
-          line = ('%f,%f,%f,%f,%f,%f,%f,%f\n') % (stamp, x, y, z, latest_q.x, latest_q.y, latest_q.z, latest_q.w)
+          line = ('%f,%f,%f,%f,%f,%f,%f,%f\n') % (stamp, x, y, z, latest_q.w, latest_q.x, latest_q.y, latest_q.z)
           f.write(line)
       elif pos=='gps' and msg_type == 'GPS' and msg['Status'] >= 3:
         stamp = gps2utc(msg['GMS']/1000., msg['GWk'])

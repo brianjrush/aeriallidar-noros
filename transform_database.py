@@ -2,7 +2,6 @@
 
 from utils import gps2utc
 import numpy as np
-import quaternion
 from transform import Transform
 from math import radians
 
@@ -28,7 +27,7 @@ class TransformDatabase():
 
   def read_transforms_from_csv(self, tf_file):
     ''' Data needed:
-      [stamp], [x], [y], [z], [qx], [qy], [qz], [qw]
+      [stamp], [x], [y], [z], [qw], [qx], [qy], [qz]
     '''
     #print("Reading transforms from %s" % tf_file)
     tfs = []
@@ -40,12 +39,12 @@ class TransformDatabase():
       x = float(fields[1])
       y = float(fields[2])
       z = float(fields[3])
-      qx = float(fields[4])
-      qy = float(fields[5])
-      qz = float(fields[6])
-      qw = float(fields[7])
+      qw = float(fields[4])
+      qx = float(fields[5])
+      qy = float(fields[6])
+      qz = float(fields[7])
       stamps.append(stamp)
-      tfs.append(Transform(stamp, x, y, z, qx, qy, qz, qw))
+      tfs.append(Transform(stamp=stamp, x=x, y=y, z=z, qw=qw, qx=qx, qy=qy, qz=qz))
     f.close()
     self.stamps = np.array(stamps)
     self.transforms = np.array(tfs)

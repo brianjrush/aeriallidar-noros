@@ -75,13 +75,13 @@ if __name__ == '__main__':
   import sys
   from multiprocessing import Pool
   if len(sys.argv) < 4:
-    print('Not enough arguments. Usage: %s [output_dir] [tfs.csv] [input.ply...]' % sys.argv[0])
+    print('Not enough arguments. Usage: %s [output_dir] [tfs.json] [input.ply...]' % sys.argv[0])
     sys.exit(1)
   output_dir = sys.argv[1]
   #stamp_file = sys.argv[2]
-  tf_csv = sys.argv[2]
+  tf_json = sys.argv[2]
   total_args = len(sys.argv) - 4
-  tf_db = TransformDatabase(csv=tf_csv)
+  tf_db = TransformDatabase(jsonfile=tf_json)
 
   pool = Pool(processes=8)
 #  run_file(sys.argv[4])

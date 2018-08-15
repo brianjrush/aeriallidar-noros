@@ -34,14 +34,17 @@ shift 2
 TMPDIR="/tmp/lidar"
 mkdir -p "$TMPDIR"
 
-tfnpy="$TMPDIR/tf.npy"
-stampsnpy="$TMPDIR/stamp.npy"
-csv="$TMPDIR/tf.csv"
-
-echo "Parsing transforms from $dataflash_log"
-python3 dataflash_converter.py "$dataflash_log" "$csv" 'nkf'
-python3 csv_to_npy.py "$csv" "$stampsnpy" "$tfnpy"
-echo "Done parsing transforms"
+#tfnpy="$TMPDIR/tf.npy"
+#stampsnpy="$TMPDIR/stamp.npy"
+json="$TMPDIR/tf.json"
+if [ ${dataflash_log: -5} == '.json' ]; then
+  json="$dataflash_log"
+  echo "Using existing transforms"
+else
+  echo "Parsing transforms from $dataflash_log"
+  python3 dataflash_converter.py "$dataflash_log" "$json"
+  echo "Done parsing transforms"
+fi
 
 if $load_to_ram; then
   echo "Loading clouds into RAM..."
@@ -58,9 +61,9 @@ fi
 
 echo "Transforming clouds with 8 jobs"
 if $load_to_ram; then
-  python3 pointcloud_transformer_parallel.py "$outdir" "$stampsnpy" "$tfnpy" $TMPDIR/clouds/*
+  python3 pointcloud_transformer_parallel.py "$outdir" "$json" $TMPDIR/clouds/*
 else
-  python3 pointcloud_transformer_parallel.py "$outdir" "$stampsnpy" "$tfnpy" "$@"
+  python3 pointcloud_transformer_parallel.py "$outdir" "$json" "$@"
 fi
 if $del; then rm -r "$TMPDIR"; fi
 echo "Done"

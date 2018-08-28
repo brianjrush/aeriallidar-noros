@@ -4,7 +4,7 @@ import struct
 import pointcloud
 from math import isnan
 
-def read(infile, min_rgb=0):
+def read(infile, min_rgb=0, strip_min=False):
   malformed = True
 
   ply_types = {'float' : 'f',
@@ -95,11 +95,15 @@ def read(infile, min_rgb=0):
       r = max(fields[vertices['red']], min_rgb)
       g = max(fields[vertices['green']], min_rgb)
       b = max(fields[vertices['blue']], min_rgb)
-      if not isnan(x) and not isnan(y) and not isnan(z):
-        if count >= len(points):
-          points.extend([None] * (vertices['length'] // 10))
-        points[count] = pointcloud.Point(x,y,z,r,g,b)
-        count += 1
+      if not strip_min or not (r == min_rgb or g == min_rgb or b == min_rgb):
+        if not isnan(x) and not isnan(y) and not isnan(z):
+          if count >= len(points):
+            if vertices['length'] // 10 == 0:
+              points.extend([None] * vertices['length'])
+            else:
+              points.extend([None] * (vertices['length'] // 10))
+          points[count] = pointcloud.Point(x,y,z,r,g,b)
+          count += 1
     except KeyError:
       raise PLYParseError("Unable to parse binary data with format string %s" % struct_format)
     current += vertex_parser.size
@@ -145,4 +149,4 @@ def write(cloud, outfile):
   f.close()
 
 if __name__ == '__main__':
-  read('/home/e4e/data-2018-08-01/clouds/00044.ply')
+  cloud=read('/home/e4e/testclouds/new/03394.ply')

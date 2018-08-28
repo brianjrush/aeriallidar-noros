@@ -1,25 +1,36 @@
 #!/usr/bin/python3
 import os
-import quaternion
+import json
 from transform_database import TransformDatabase
 from transform import Transform
 import ply_formatter as ply_formatter
 from pointcloud import PointCloud
 import numpy as np
 from point import Point
+import multiprocessing
 
 output_dir = ''
 stamp_file = None
 tf_file = None
 tf_db = None
+strip = None
+min_rgb = None
+sections = None
+error_limit = 0.1
 # transform from quanergy (North West Up) to Pixhawk (North East Down)
 #                                                 w   x    y   z
 static_transform = np.array([0.707,0,0.707,0])
 
-def transform(tfs, cloud):
+error_counter = multiprocessing.Value('i', 0)
+skipped_counter = multiprocessing.Value('i', 0)
+
+def transform(tfs, cloud, limit=0.1):
   tf, error = tfs.lookup_transform(cloud.stamp)
-  if error > 0.25:
+  if error > limit:
     #print("OUT OF SYNC. Looking for %f, found %f. Error of %f seconds" % (cloud.stamp, tf.stamp, error))
+    global error_counter
+    with error_counter.get_lock():
+      error_counter.value += 1
     return None
   #else:
   #  print("Looking for %f, found %f. Error of %f seconds" % (cloud.stamp, tf.stamp, error))
@@ -43,15 +54,6 @@ def rotate_point(q, p):
   return transformed
 
 def transform_point(point, tf):
-  # rotate by fixed transform
-  #fixed_tf = quaternion.from_float_array([0,-0.707, 0,0.707])
-  #transformed = quaternion.rotate_vectors(fixed_tf,point.position)
-
-  #fixed_tf = quaternion.from_float_array([0,1,0,0])
-  #transformed = quaternion.rotate_vectors(fixed_tf,transformed)
-  #fixed_tf = np.array([0,.707,0,-.707])
-  #transformed = rotate_point(point.position, fixed_tf)
-
   # rotate by tf rotation
   #transformed = quaternion.rotate_vectors(tf.rotation, transformed)
   transformed = rotate_point(static_transform, point.position)
@@ -63,35 +65,61 @@ def transform_point(point, tf):
   return transformed_point
 
 def run_file(f):
-  cloud = ply_formatter.read(f, min_rgb=5)
-  transformed_cloud = transform(tf_db, cloud)
-  #print(transformed_cloud, file=log)
+  cloud = ply_formatter.read(f, min_rgb=min_rgb, strip_min=strip)
+  if sections is not None:
+    for section in sections:
+      if cloud.stamp >= section['start'] and cloud.stamp < section['end']:
+        if section['inair']:
+          break
+        else:
+          global skipped_counter
+          with skipped_counter.get_lock():
+            skipped_counter.value += 1
+          return
+  transformed_cloud = transform(tf_db, cloud, limit=error_limit)
   if transformed_cloud is not None and transformed_cloud.size() is not 0:
     outfile = os.path.join(output_dir, os.path.basename(f))
     ply_formatter.write(transformed_cloud, outfile)
-    #print("Transformed file %s to %s" % (f, outfile))
- 
+
 if __name__ == '__main__':
   import sys
-  from multiprocessing import Pool
-  if len(sys.argv) < 4:
-    print('Not enough arguments. Usage: %s [output_dir] [tfs.json] [input.ply...]' % sys.argv[0])
-    sys.exit(1)
-  output_dir = sys.argv[1]
-  #stamp_file = sys.argv[2]
-  tf_json = sys.argv[2]
-  total_args = len(sys.argv) - 4
-  tf_db = TransformDatabase(jsonfile=tf_json)
+  import argparse
 
-  pool = Pool(processes=8)
-#  run_file(sys.argv[4])
-#  run_file(sys.argv[5])
-#  run_file(sys.argv[6])
+  # parse arguments
+  parser = argparse.ArgumentParser(description="Process .ply files from a LiDAR and transform them using transforms stored in a json file.")
+  parser.add_argument('output_dir', type=str, help='The output directory. This must be set')
+  parser.add_argument('json', type=str, help='The json file containing transforms')
+  parser.add_argument('clouds', metavar='cloud', type=str, nargs='+', help='ply files to transform')
+  parser.add_argument('-j', metavar='jobs', type=int, help='The number of jobs to run', default=1)
+  parser.add_argument('-m', '--min-rgb', metavar='VAL', type=int, help='Set a minimum rgb value (0-255) to all points (default is 0)', default=0)
+  parser.add_argument('-l', '--limit', metavar='SECS', type=float, help='Set the maximum error between the timestamp on the pointcloud, and the timestamp on the transform')
+  parser.add_argument('--strip', action='store_true', help='Used  with the -m option. Set whether any points below the minimum rgb value should be increased to minimum, or ignored (default is increased)')
+  parser.add_argument('--sections', help='Supply a section file to help reduce computation. Any section not marked as in air will be ignored', default=None)
+
+  args = parser.parse_args()
+
+  total_clouds = len(args.clouds)
+  jobs = args.j
+  print('Transforming %d files with %d jobs' % (total_clouds, jobs))
+  width = len(str(total_clouds))
+  output_dir = args.output_dir
+  tf_json = args.json
+  tf_db = TransformDatabase(jsonfile=tf_json)
+  strip = args.strip
+  error_limit = args.limit
+  min_rgb = args.min_rgb
+  if args.sections is not None:
+    with open(args.sections) as f:
+      sections = json.load(f)
+
+  pool = multiprocessing.Pool(processes=jobs)
   import time
   start_time = time.time()
-  for i,_ in enumerate(pool.imap_unordered(run_file, sys.argv[4:]), 1):
+  for i,_ in enumerate(pool.imap_unordered(run_file, args.clouds), 1):
     if i % 500 == 0 and i != 0:
-      sys.stdout.write(" - %.2f seconds elapsed\n" % (time.time() - start_time))
+      sys.stdout.write(" - %.2f secs\n" % (time.time() - start_time))
       start_time = time.time()
-    sys.stdout.write("\rTransformed %d/%d files" % (i, total_args))
-  print("Done.")
+    sys.stdout.write("\r{:0>{w}}/{}: {:^{w}} successful  {:^{w}} ignored  {:^{w}} out of sync".format(i, total_clouds, i-error_counter.value-skipped_counter.value, skipped_counter.value, error_counter.value, w=width))
+  sys.stdout.write('\n')
+  pool.close()
+  pool.join()

@@ -26,7 +26,7 @@ mkdir -p "$TMPDIR"
 
 json="$TMPDIR/tf.json"
 sectionjson="$TMPDIR/sections.json"
-./dataflash_converter.py "$dataflash_log" "$json" "$sectionjson"
+./converters/dataflash_converter.py "$dataflash_log" "$json" "$sectionjson"
 
 echo "Loading clouds into RAM..."
 mkdir -p "$TMPDIR/clouds"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
-import ply_formatter
-from point import Point
+import tools.ply_formatter
+from pointclouds.point import Point
 
 class PointCloud():
   def __init__(self, points=[], ply=None):
@@ -11,10 +11,10 @@ class PointCloud():
       self.from_ply(ply)
   
   def from_ply(self, infile):
-    self.points = ply_formatter.read(infile).points
+    self.points = tools.ply_formatter.read(infile).points
 
   def to_ply(self, outfile):
-    ply_formatter.write(self, outfile)
+    tools.ply_formatter.write(self, outfile)
 
   def size(self):
     return len(self.points)

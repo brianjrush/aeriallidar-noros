@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from utils import gps2utc
+from tools.utils import gps2utc
 from pymavlink import mavutil
 import sys
 

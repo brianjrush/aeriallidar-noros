@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from pointcloud import PointCloud
+from pointclouds.pointcloud import PointCloud
 
 class PointCloudDatabase():
   def __init__(self, clouds=[], infiles=None):

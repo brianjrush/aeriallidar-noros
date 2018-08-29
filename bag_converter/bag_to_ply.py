@@ -1,10 +1,9 @@
 #!/usr/bin/env python2 
 
 import sys
-sys.path.append("..")
-import ply_formatter
-from pointcloud import PointCloud
-from point import Point
+import tools.ply_formatter
+from pointclouds.pointcloud import PointCloud
+from pointclouds.point import Point
 import sensor_msgs.point_cloud2 as pc2
 import rosbag
 import struct

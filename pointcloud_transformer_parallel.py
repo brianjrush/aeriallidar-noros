@@ -1,12 +1,12 @@
 #!/usr/bin/python3
 import os
 import json
-from transform_database import TransformDatabase
-from transform import Transform
-import ply_formatter as ply_formatter
-from pointcloud import PointCloud
+from transformer.transform_database import TransformDatabase
+from transformer.transform import Transform
+import tools.ply_formatter as ply_formatter
+from pointclouds.pointcloud import PointCloud 
 import numpy as np
-from point import Point
+from pointclouds.point import Point
 import multiprocessing
 
 output_dir = ''

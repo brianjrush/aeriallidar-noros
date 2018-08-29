@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 import struct
-import pointcloud
+import pointclouds.pointcloud as pointcloud
 from math import isnan
 
 def read(infile, min_rgb=0, strip_min=False):

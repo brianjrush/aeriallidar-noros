@@ -64,9 +64,9 @@ def convert_dataflash_to_json(dataflash_file, outfile, sectionfile):
         data[msg_type][stamp] = msg
     mavmsg = mavmaster.recv_msg()
   with open(outfile, 'w') as f:
-    json.dump(data,f, indent=2, sort_keys=True)
+    json.dump(data,f)
   with open(sectionfile, 'w') as f:
-    json.dump(sections,f,indent=2,sort_keys=True)
+    json.dump(sections,f)
 
 if __name__ == '__main__':
   import sys

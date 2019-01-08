@@ -17,9 +17,22 @@ typedef struct {
   double tow;
   u16 gwk;
   u16 time_valid_flags;
-} output_t;
+} ahrs_output_t;
 
-FILE* outfile = fopen("test.bin", "wb");
+typedef struct {
+  double lat;
+  double lng;
+  double ellipsoid_height;
+  double msl_height;
+  float horiz_accuracy;
+  float vert_accuracy;
+  double tow;
+  u16 gwk;
+  u16 time_valid_flags;
+} gps_output_t;
+
+FILE* ahrs_outfile = fopen("ahrs.bin", "wb");
+FILE* gps_outfile = fopen("gps.bin", "wb");
 bool should_exit = false;
 int count = 0;
 
@@ -29,7 +42,7 @@ void ahrs_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callba
   mip_field_header *field_header;
   u8 *field_data;
   u16 field_offset = 0;
-  output_t output_message;
+  ahrs_output_t ahrs_output_message;
 
   switch(callback_type) {
     case MIP_INTERFACE_CALLBACK_VALID_PACKET:
@@ -49,10 +62,10 @@ void ahrs_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callba
 //            att_msg.orientation.y = qtn.q[2];
 //            att_msg.orientation.z = qtn.q[3];
 //            att_msg.orientation.w = qtn.q[0];
-            output_message.qw = qtn.q[0];
-            output_message.qx = qtn.q[1];
-            output_message.qy = qtn.q[2];
-            output_message.qz = qtn.q[3];
+            ahrs_output_message.qw = qtn.q[0];
+            ahrs_output_message.qx = qtn.q[1];
+            ahrs_output_message.qy = qtn.q[2];
+            ahrs_output_message.qz = qtn.q[3];
             std::cout << "Qw: " << qtn.q[0] << " ";
             std::cout << "Qx: " << qtn.q[1] << " ";
             std::cout << "Qy: " << qtn.q[2] << " ";
@@ -73,9 +86,9 @@ void ahrs_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callba
 //              stamp = ros::Time::now();
 //            }
 //            att_msg.header.stamp = stamp;
-            output_message.tow = gpstime.tow;
-            output_message.gwk = gpstime.week_number;
-            output_message.time_valid_flags = gpstime.valid_flags;
+            ahrs_output_message.tow = gpstime.tow;
+            ahrs_output_message.gwk = gpstime.week_number;
+            ahrs_output_message.time_valid_flags = gpstime.valid_flags;
             std::cout << "TOW: " << gpstime.tow << " ";
             std::cout << "GWk: " << gpstime.week_number << " ";
           } break;
@@ -125,13 +138,13 @@ void ahrs_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callba
       std::cerr << "Unknown AHRS callback type from microstrain INS: " << callback_type << std::endl;
     } break;
   }
-  fwrite(&output_message.qw, sizeof(float), 1, outfile);
-  fwrite(&output_message.qx, sizeof(float), 1, outfile);
-  fwrite(&output_message.qy, sizeof(float), 1, outfile);
-  fwrite(&output_message.qz, sizeof(float), 1, outfile);
-  fwrite(&output_message.tow, sizeof(double), 1, outfile);
-  fwrite(&output_message.gwk, sizeof(u16), 1, outfile);
-  fwrite(&output_message.time_valid_flags, sizeof(u16), 1, outfile);
+  fwrite(&ahrs_output_message.qw, sizeof(float), 1, ahrs_outfile);
+  fwrite(&ahrs_output_message.qx, sizeof(float), 1, ahrs_outfile);
+  fwrite(&ahrs_output_message.qy, sizeof(float), 1, ahrs_outfile);
+  fwrite(&ahrs_output_message.qz, sizeof(float), 1, ahrs_outfile);
+  fwrite(&ahrs_output_message.tow, sizeof(double), 1, ahrs_outfile);
+  fwrite(&ahrs_output_message.gwk, sizeof(u16), 1, ahrs_outfile);
+  fwrite(&ahrs_output_message.time_valid_flags, sizeof(u16), 1, ahrs_outfile);
   std::cout << " Count " << count << std::endl;
   count++;
 }
@@ -142,6 +155,7 @@ void gps_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callbac
   mip_field_header *field_header;
   u8 *field_data;
   u16 field_offset = 0;
+  gps_output_t gps_output_message;
 
   switch(callback_type) {
     case MIP_INTERFACE_CALLBACK_VALID_PACKET:
@@ -156,6 +170,13 @@ void gps_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callbac
             mip_gps_llh_pos pos;
             memcpy(&pos, field_data, sizeof(mip_gps_llh_pos));
             mip_gps_llh_pos_byteswap(&pos);
+
+            gps_output_message.lat = pos.latitude;
+            gps_output_message.lng = pos.longitude;
+            gps_output_message.ellipsoid_height = pos.ellipsoid_height;
+            gps_output_message.msl_height = pos.msl_height;
+            gps_output_message.horiz_accuracy = pos.horizontal_accuracy;
+            gps_output_message.vert_accuracy = pos.vertical_accuracy;
             
 //            pos_msg.latitude = pos.latitude;
 //            pos_msg.longitude = pos.longitude;
@@ -166,6 +187,11 @@ void gps_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callbac
             mip_gps_time gpstime;
             memcpy(&gpstime, field_data, sizeof(mip_gps_time));
             mip_gps_time_byteswap(&gpstime);
+
+            gps_output_message.tow = gpstime.tow;
+            gps_output_message.gwk = gpstime.week_number;
+            gps_output_message.time_valid_flags = gpstime.valid_flags;
+
 //            ros::Time stamp;
 //            // Check if we have signal
 //            if( (gpstime.valid_flags & 1) == 1) {
@@ -177,11 +203,11 @@ void gps_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callbac
 //            }
 //            pos_msg.header.stamp = stamp;
           } break;
-          case MIP_GPS_DATA_FIX_INFO:
-          { 
-            mip_gps_fix_info fix_info;
-            memcpy(&fix_info, field_data, sizeof(mip_gps_fix_info));
-            mip_gps_fix_info_byteswap(&fix_info);
+//          case MIP_GPS_DATA_FIX_INFO:
+//          { 
+//            mip_gps_fix_info fix_info;
+//            memcpy(&fix_info, field_data, sizeof(mip_gps_fix_info));
+//            mip_gps_fix_info_byteswap(&fix_info);
             
             // status is the type of fix:
             // 0x00 - 3D fix
@@ -193,7 +219,7 @@ void gps_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callbac
 
             // service is the number of sv's we have
 //            pos_msg.status.service = fix_info.num_sv;
-          } break;
+//          } break;
           default:
           {
             std::cerr << "Unknown GPS packet type received: " << field_header->descriptor << std::endl;
@@ -215,6 +241,16 @@ void gps_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callbac
       std::cerr << "Unknown GPS callback type from microstrain INS: " << callback_type << std::endl;
     } break;
   }
+  fwrite(&gps_output_message.lat, sizeof(double), 1, gps_outfile);
+  fwrite(&gps_output_message.lng, sizeof(double), 1, gps_outfile);
+  fwrite(&gps_output_message.ellipsoid_height, sizeof(double), 1, gps_outfile);
+  fwrite(&gps_output_message.msl_height, sizeof(double), 1, gps_outfile);
+  fwrite(&gps_output_message.horiz_accuracy, sizeof(float), 1, gps_outfile);
+  fwrite(&gps_output_message.vert_accuracy, sizeof(float), 1, gps_outfile);
+  fwrite(&gps_output_message.valid_flags, sizeof(u16), 1, gps_outfile);
+  fwrite(&gps_output_message.tow, sizeof(double), 1, gps_outfile);
+  fwrite(&gps_output_message.gwk, sizeof(u16), 1, gps_outfile);
+  fwrite(&gps_output_message.time_valid_flags, sizeof(u16), 1, gps_outfile);
 }
 
 u16 init_microstrain(mip_interface *device_interface) {
@@ -239,16 +275,16 @@ u16 init_microstrain(mip_interface *device_interface) {
   //ahrs_data_decimation[3] = 0x01;
 
   // define GPS message
-  u8 gps_num_fields = 3;
+  u8 gps_num_fields = 2;
   u8 gps_data_descriptors[gps_num_fields];
   gps_data_descriptors[0] = MIP_GPS_DATA_LLH_POS;
   gps_data_descriptors[1] = MIP_GPS_DATA_GPS_TIME;
-  gps_data_descriptors[2] = MIP_GPS_DATA_FIX_INFO;
+  //gps_data_descriptors[2] = MIP_GPS_DATA_FIX_INFO;
 
   u16 gps_data_decimation[gps_num_fields];
   gps_data_decimation[0] = 0x01;
   gps_data_decimation[1] = 0x01;
-  gps_data_decimation[2] = 0x01;
+  //gps_data_decimation[2] = 0x01;
   
   // set AHRS and GPS messages
   while (mip_3dm_cmd_ahrs_message_format(device_interface, MIP_FUNCTION_SELECTOR_WRITE, &ahrs_num_fields, ahrs_data_descriptors, ahrs_data_decimation) != MIP_INTERFACE_OK) {}
@@ -274,5 +310,6 @@ int main(int argc, char* argv[]) {
     mip_interface_update(&device_interface);
     usleep(1000);
   }
-  fclose(outfile);
+  fclose(ahrs_outfile);
+  fclose(gps_outfile);
 }

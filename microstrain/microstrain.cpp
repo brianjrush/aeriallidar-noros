@@ -247,7 +247,6 @@ void gps_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callbac
   fwrite(&gps_output_message.msl_height, sizeof(double), 1, gps_outfile);
   fwrite(&gps_output_message.horiz_accuracy, sizeof(float), 1, gps_outfile);
   fwrite(&gps_output_message.vert_accuracy, sizeof(float), 1, gps_outfile);
-  fwrite(&gps_output_message.valid_flags, sizeof(u16), 1, gps_outfile);
   fwrite(&gps_output_message.tow, sizeof(double), 1, gps_outfile);
   fwrite(&gps_output_message.gwk, sizeof(u16), 1, gps_outfile);
   fwrite(&gps_output_message.time_valid_flags, sizeof(u16), 1, gps_outfile);

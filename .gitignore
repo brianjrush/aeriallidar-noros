@@ -1,0 +1,6 @@
+**/__pycache__/
+*.bin
+*.json
+*.ply
+*.swp
+**/__init__.py

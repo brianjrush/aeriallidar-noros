@@ -149,7 +149,7 @@ int main(int argc, char** argv)
     std::cout << pc->header.stamp << " " << pc->size() << " " << std::setfill('0') << std::setw(5) << cloud_count << std::endl;
 
     std::ostringstream os;
-    os << output_dir << "/" << std::setfill('0') << std::setw(5) << cloud_count << ".ply";
+    os << output_dir << "/" << std::setfill('0') << std::setw(11) << pc->header.stamp << "_" << std::setw(5) << cloud_count << ".ply";
     pcl::io::savePLYFileBinary(os.str(), *pc);
   }));
 

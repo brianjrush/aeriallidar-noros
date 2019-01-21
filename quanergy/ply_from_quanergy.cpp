@@ -1,129 +1,160 @@
-#include <quanergy/parsers/failover_client.h>
-#include <quanergy/common/pointcloud_types.h>
-#include <quanergy/parsers/deserialize_00.h>
-#include <quanergy/parsers/pointcloud_generator_00.h>
-#include <iostream>
-#include <iomanip>
-#include <quanergy/parsers/deserialize_01.h>
-#include <quanergy/parsers/pointcloud_generator_01.h>
+#include <signal.h>
+
+#include <pcl/console/parse.h>
+#include <pcl/io/ply_io.h>
+
+#include <quanergy/client/sensor_client.h>
+#include <quanergy/parsers/data_packet_parser_00.h>
+#include <quanergy/parsers/data_packet_parser_01.h>
+#include <quanergy/parsers/data_packet_parser_04.h>
+#include <quanergy/parsers/variadic_packet_parser.h>
+#include <quanergy/modules/encoder_angle_calibration.h>
 #include <quanergy/modules/polar_to_cart_converter.h>
 
-struct Client {
-  typedef quanergy::client::FailoverClient<quanergy::client::DataPacket01, quanergy::client::DataPacket00> ClientType;
-  typedef quanergy::client::PolarToCartConverter Converter;
+// define some strings that will be used on command line
+namespace
+{
+  static const std::string MANUAL_CORRECT{"--manual-correct"};
+  static const std::string CALIBRATE_STR{"--calibrate"};
+  static const std::string AMPLITUDE_STR{"--amplitude"};
+  static const std::string PHASE_STR{"--phase"};
+}
 
-  Client(std::string const &host, std::string const &port, std::string const outdir) 
-    : client(host, port, "lidar", 100) {
-    output_dir = outdir;
-    std::cout << "Setting up client..." << std::endl;
-    
-    cloud_connection = client.connect([this](const ClientType::Result& pc)
-                                     { this->converter.slot(pc);});
-                                     //{ this->print(pc); });
-    std::cout << "Connected to LiDAR" << std::endl;
-    converter_connection = converter.connect([this](const Converter::ResultType& pc) {
-  std::unique_lock<std::mutex> lock(this->pc_mutex);
-  new_point_cloud = pc;
- });
-    std::cout << "Connected to converter slot" << std::endl;
-  }
+// output usage message
+void usage(char** argv)
+{
+  std::cout << "usage: " << argv[0]
+            << " --host <host> -o <output directory> [-h | --help] [" << CALIBRATE_STR << "][" << MANUAL_CORRECT << " " << AMPLITUDE_STR << " <value> " << PHASE_STR << " <value>]" << std::endl << std::endl
 
-  bool newCloud() {
-    if (new_point_cloud != point_cloud) {
-      std::unique_lock<std::mutex> lock(pc_mutex);
-      point_cloud = new_point_cloud;
-      return true;
-    }
-    return false;
-  }
+            << "    --host        hostname or IP address of the sensor" << std::endl
+            << "    " << CALIBRATE_STR << "   calibrate the host sensor and apply calibration to outgoing points" << std::endl
+            << "    " << MANUAL_CORRECT << " --amplitude <amplitude> --phase <phase>    Manually correct encoder error specifying amplitude and phase correction, in radians" << std::endl
+            << "-h, --help        show this help and exit" << std::endl;
+  return;
+}
 
-  void writePLY(std::string path, const quanergy::PointCloudXYZIRPtr &cloud) {
-    FILE* fp = fopen(path.c_str(), "wb");
-    fprintf(fp, "ply\n");
-    fprintf(fp, "format binary_little_endian 1.0\n");
-    fprintf(fp, "element vertex %lu\n", cloud->size());
-    fprintf(fp, "property float x\n");
-    fprintf(fp, "property float y\n");
-    fprintf(fp, "property float z\n");
-    fprintf(fp, "property uchar red\n");
-    fprintf(fp, "property uchar green\n");
-    fprintf(fp, "property uchar blue\n");
-    fprintf(fp, "element timestamp 1\n");
-    fprintf(fp, "property double stamp\n");
-    fprintf(fp, "end_header\n");
+// convenient typedefs
+typedef quanergy::client::SensorClient ClientType;
+typedef quanergy::client::VariadicPacketParser<quanergy::PointCloudHVDIRPtr,                      // return type
+                                               quanergy::client::DataPacketParser00,              // PARSER_00_INDEX
+                                               quanergy::client::DataPacketParser01,              // PARSER_01_INDEX
+                                               quanergy::client::DataPacketParser04> ParserType;  // PARSER_04_INDEX
 
-    for(quanergy::PointXYZIR p : cloud->points) {
-      float position[3];
-      unsigned char color[3];
-      
-      position[0] = p.x;
-      position[1] = p.y;
-      position[2] = p.z;
-
-      color[0] = p.intensity;
-      color[1] = p.intensity;
-      color[2] = p.intensity;
-
-      fwrite(position, sizeof(position), 1, fp);
-      fwrite(color, sizeof(color), 1, fp);
-    }
-    double timestamp[] = {cloud->header.stamp/1E6};
-    fwrite(timestamp, sizeof(timestamp), 1, fp);
-    fclose(fp);
-  }
-
-  void run() {
-    std::cout << "RUN" << std::endl;
-    std::thread client_thread([this] {
-                                       try {
-                                         this->client.run();
-                                       } catch (std::exception& e) {
-                                         std::cerr << "Terminating after catching exception: " << e.what() << std::endl;
-                                         this->kill_prog = true;
-                                       }
-                                     });
-
-    std::cout << "Starting loop" << std::endl;
-    count = 0;
-    while (!kill_prog) {
-      if (newCloud()) {
-        count++;
-        //std::cout << "got " << count << " pointclouds" << std::endl;
-        std::cout << point_cloud->header.stamp << " " << point_cloud->size() << " " << std::setfill('0') << std::setw(5) << count << std::endl;
-
-        std::ostringstream os;
-        os << output_dir << "/" << std::setfill('0') << std::setw(5) << count << ".ply";
-
-        writePLY(os.str(), point_cloud);
-      }
-    }
-
-    converter_connection.disconnect();
-    cloud_connection.disconnect();
-    client.stop();
-    client_thread.join();
-  }
-
-  private:
-    ClientType client;
-    boost::signals2::connection cloud_connection;
-    boost::signals2::connection converter_connection;
-    Converter::ResultType new_point_cloud;
-    Converter::ResultType point_cloud;
-    std::mutex pc_mutex;
-    Converter converter;
-    
-    std::string output_dir;
-    int count;
-    bool kill_prog = false;
+// enum to make indexing into the VariadicPacketParser easier
+enum
+{
+  PARSER_00_INDEX = 0,
+  PARSER_01_INDEX = 1,
+  PARSER_04_INDEX = 2
 };
 
-int main(int argc, char** argv) {
-  if (argc < 2) {
-    std::cout << "Please supply an output directory." << std::endl;
-    return 1;
+// PacketParserModule wraps the parser with signal/slot functionality
+typedef quanergy::client::PacketParserModule<ParserType> ParserModuleType;
+// EncoderAngleCalibration provides some calibration functionality for M8
+typedef quanergy::calibration::EncoderAngleCalibration CalibrationType;
+// PolarToCartConverter converts the polar point cloud to Cartesian
+typedef quanergy::client::PolarToCartConverter ConverterType;
+
+ClientType* client;
+// store connections for cleaner shutdown
+std::vector<boost::signals2::connection> connections;
+
+void quit(int s) {
+  client->stop();
+  delete client;
+  connections.clear();
+  exit(0);
+}
+
+int main(int argc, char** argv)
+{
+  int max_num_args = 10;
+  // get host
+  if (argc < 2 || argc > max_num_args || pcl::console::find_switch(argc, argv, "-h") ||
+      pcl::console::find_switch(argc, argv, "--help") || !pcl::console::find_switch(argc, argv, "--host") ||
+      !pcl::console::find_switch(argc, argv, "-o"))
+  {
+    usage (argv);
+    return (0);
   }
-  Client client("10.0.0.56", "4141", argv[1]);
-  client.run();
-  return 0;
+
+  std::string output_dir;
+  pcl::console::parse_argument(argc, argv, "-o", output_dir);
+
+  std::string host;
+  std::string port = "4141";
+
+  pcl::console::parse_argument(argc, argv, "--host", host);
+
+  // create modules
+  client = new ClientType(host, port, 100);
+  ParserModuleType parser;
+  ConverterType converter;
+
+  CalibrationType calibrator;
+
+  // setup modules
+  // setFrameId sets the frame id in the PCL point clouds
+  parser.get<PARSER_00_INDEX>().setFrameId("quanergy");
+  // setReturnSelection allows choosing between the 3 returns (Packet00, only)
+  parser.get<PARSER_00_INDEX>().setReturnSelection(0);
+  // setDegreesOfSweepPerCloud allows breaking the point clouds into smaller pieces (M8 only)
+  parser.get<PARSER_00_INDEX>().setDegreesOfSweepPerCloud(360.0);
+  parser.get<PARSER_01_INDEX>().setFrameId("quanergy");
+  parser.get<PARSER_04_INDEX>().setFrameId("quanergy");
+
+
+  // connect the packets from the client to the parser
+  connections.push_back(client->connect([&parser](const ClientType::ResultType& pc){ parser.slot(pc); }));
+  
+  // if we're doing automatic calibration or if we're setting the calibration
+  // manually, include the calibrator in the chain
+  if (pcl::console::find_switch(argc, argv, CALIBRATE_STR.c_str()) ||
+      pcl::console::find_switch(argc, argv, MANUAL_CORRECT.c_str()))
+  {
+    // connect the parser to the calibrator
+    connections.push_back(parser.connect([&calibrator](const ParserModuleType::ResultType& pc){ calibrator.slot(pc); }));
+    // connect the calibrator to the converter
+    connections.push_back(calibrator.connect([&converter](const CalibrationType::ResultType& pc){ converter.slot(pc); }));
+
+    // set calibrator parameters
+    if (pcl::console::find_switch(argc, argv, MANUAL_CORRECT.c_str()))
+    {
+      if (!pcl::console::find_switch(argc, argv, AMPLITUDE_STR.c_str()) ||
+          !pcl::console::find_switch(argc, argv, PHASE_STR.c_str()))
+      {
+        usage(argv);
+        return(0);
+      }
+      double amplitude = 0.;
+      double phase = 0.;
+      pcl::console::parse_argument(argc, argv, AMPLITUDE_STR.c_str(), amplitude);
+      pcl::console::parse_argument(argc, argv, PHASE_STR.c_str(), phase);
+
+      calibrator.setParams(amplitude, phase);
+    }
+  }
+  else
+  {
+    // connect the parser to the converter
+    connections.push_back(parser.connect([&converter](const ParserModuleType::ResultType& pc){ converter.slot(pc); }));
+  }
+
+  ////////////////////////////////////////////
+  /// connect application specific logic here to consume the point cloud
+  ////////////////////////////////////////////
+  unsigned int cloud_count = 0;
+  connections.push_back(converter.connect([&cloud_count, &output_dir](const ConverterType::ResultType& pc) {
+    ++cloud_count;
+    std::cout << pc->header.stamp << " " << pc->size() << " " << std::setfill('0') << std::setw(5) << cloud_count << std::endl;
+
+    std::ostringstream os;
+    os << output_dir << "/" << std::setfill('0') << std::setw(5) << cloud_count << ".ply";
+    pcl::io::savePLYFileBinary(os.str(), *pc);
+  }));
+
+  signal(SIGINT, quit);
+
+  client->run();
+  return (0);
 }

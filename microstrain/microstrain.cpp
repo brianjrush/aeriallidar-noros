@@ -301,7 +301,7 @@ void clean_exit(int s) {
 
 int main(int argc, char* argv[]) {
   mip_interface device_interface;
-  init_microstrain(&device_interface);
+  if (init_microstrain(&device_interface) == MIP_INTERFACE_ERROR) { return 1; }
 
 //  ros::init(argc, argv, "microstrain");
   signal(SIGINT, clean_exit);

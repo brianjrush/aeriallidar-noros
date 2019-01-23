@@ -31,8 +31,8 @@ typedef struct {
   u16 time_valid_flags;
 } gps_output_t;
 
-FILE* ahrs_outfile = fopen("ahrs.bin", "wb");
-FILE* gps_outfile = fopen("gps.bin", "wb");
+FILE* ahrs_outfile;
+FILE* gps_outfile;
 bool should_exit = false;
 int count = 0;
 
@@ -252,9 +252,9 @@ void gps_packet_callback(void *user_ptr, u8 *packet, u16 packet_size, u8 callbac
   fwrite(&gps_output_message.time_valid_flags, sizeof(u16), 1, gps_outfile);
 }
 
-u16 init_microstrain(mip_interface *device_interface) {
+u16 init_microstrain(std::string device, mip_interface *device_interface) {
   // connect to sensor
-  if (mip_interface_init("/dev/microstrain", BAUDRATE, device_interface, DEFAULT_PACKET_TIMEOUT_MS) != MIP_INTERFACE_OK) {
+  if (mip_interface_init(const_cast<char*>(device.c_str()), BAUDRATE, device_interface, DEFAULT_PACKET_TIMEOUT_MS) != MIP_INTERFACE_OK) {
     std::cerr << "Failed to connect to Microstrain sensor" << std::endl;
     return MIP_INTERFACE_ERROR;
   }
@@ -301,8 +301,10 @@ void clean_exit(int s) {
 
 int main(int argc, char* argv[]) {
   mip_interface device_interface;
-  if (init_microstrain(&device_interface) == MIP_INTERFACE_ERROR) { return 1; }
-
+  std::string device = "/dev/microstrain";
+  if (init_microstrain(device, &device_interface) == MIP_INTERFACE_ERROR) { return 1; }
+  ahrs_outfile = fopen("ahrs.bin", "wb");
+  gps_outfile = fopen("gps.bin", "wb");
 //  ros::init(argc, argv, "microstrain");
   signal(SIGINT, clean_exit);
   while(!should_exit) {

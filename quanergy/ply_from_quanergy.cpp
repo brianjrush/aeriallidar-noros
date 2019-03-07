@@ -10,6 +10,8 @@
 #include <quanergy/parsers/variadic_packet_parser.h>
 #include <quanergy/modules/encoder_angle_calibration.h>
 #include <quanergy/modules/polar_to_cart_converter.h>
+#include <string>
+#include <include/ctpl.h>
 
 // define some strings that will be used on command line
 namespace
@@ -19,6 +21,56 @@ namespace
   static const std::string AMPLITUDE_STR{"--amplitude"};
   static const std::string PHASE_STR{"--phase"};
 }
+
+union Point
+{
+  struct
+  {
+    float x, y, z;
+    unsigned char r,g,b;
+  } fields;
+  char data[sizeof(float) * 3 + sizeof(char) * 3];
+};
+
+
+void writePLY(int id, std::string path, const quanergy::PointCloudXYZIRPtr &cloud) {
+std::string header = "ply\n"
+                     "format binary_little_endian 1.0\n"
+                     "element vertex " + std::to_string(cloud->size()) + "\n"
+                     "property float x\n"
+                     "property float y\n"
+                     "property float z\n"
+                     "property uchar red\n"
+                     "property uchar green\n"
+                     "property uchar blue\n"
+                     "end_header\n"
+                     "ply\n";
+//  sprintf(header, "format binary_little_endian 1.0\n");
+//  sprintf(header, "element vertex %lu\n", cloud->size());
+//  sprintf(header, "property float x\n");
+//  sprintf(header, "property float y\n");
+//  sprintf(header, "property float z\n");
+//  sprintf(header, "property uchar red\n");
+//  sprintf(header, "property uchar green\n");
+//  sprintf(header, "property uchar blue\n");
+//  sprintf(header, "end_header\n");
+
+  FILE* fp = fopen(path.c_str(), "wb");
+  Point buffer[cloud->size()];
+
+  for(int i = 0; i < cloud->size(); i++) {
+    buffer[i].fields.x = cloud->at(i).x;
+    buffer[i].fields.y = cloud->at(i).y;
+    buffer[i].fields.z = cloud->at(i).z;
+
+    buffer[i].fields.r = cloud->at(i).intensity;
+    buffer[i].fields.g = cloud->at(i).intensity;
+    buffer[i].fields.b = cloud->at(i).intensity;
+  }
+  fwrite(buffer, sizeof(Point)*cloud->size(), 1, fp);
+  fclose(fp);
+}
+
 
 // output usage message
 void usage(char** argv)
@@ -59,6 +111,9 @@ ClientType* client;
 // store connections for cleaner shutdown
 std::vector<boost::signals2::connection> connections;
 
+#define THREAD_COUNT 10
+ctpl::thread_pool pool(THREAD_COUNT);
+
 void quit(int s) {
   client->stop();
   delete client;
@@ -70,18 +125,16 @@ int main(int argc, char** argv)
 {
   int max_num_args = 10;
   // get host
-  if (argc < 2 || argc > max_num_args || pcl::console::find_switch(argc, argv, "-h") ||
-      pcl::console::find_switch(argc, argv, "--help") || !pcl::console::find_switch(argc, argv, "--host") ||
-      !pcl::console::find_switch(argc, argv, "-o"))
+  if (argc < 2 || argc > max_num_args || pcl::console::find_switch(argc, argv, "-h") )
   {
     usage (argv);
     return (0);
   }
 
-  std::string output_dir;
+  std::string output_dir = ".";
   pcl::console::parse_argument(argc, argv, "-o", output_dir);
 
-  std::string host;
+  std::string host = "10.0.0.56";
   std::string port = "4141";
 
   pcl::console::parse_argument(argc, argv, "--host", host);
@@ -140,17 +193,23 @@ int main(int argc, char** argv)
     connections.push_back(parser.connect([&converter](const ParserModuleType::ResultType& pc){ converter.slot(pc); }));
   }
 
-  ////////////////////////////////////////////
   /// connect application specific logic here to consume the point cloud
   ////////////////////////////////////////////
   unsigned int cloud_count = 0;
   connections.push_back(converter.connect([&cloud_count, &output_dir](const ConverterType::ResultType& pc) {
     ++cloud_count;
-    std::cout << pc->header.stamp << " " << pc->size() << " " << std::setfill('0') << std::setw(5) << cloud_count << std::endl;
+
+    if (cloud_count % 10 == 0) {
+      std::cout << pc->header.stamp << " " << pc->size() << " " << std::setfill('0') << std::setw(5) << cloud_count << std::endl;
+    }
 
     std::ostringstream os;
     os << output_dir << "/" << std::setfill('0') << std::setw(11) << pc->header.stamp << "_" << std::setw(5) << cloud_count << ".ply";
-    pcl::io::savePLYFileBinary(os.str(), *pc);
+    //pcl::io::savePLYFileBinary(os.str(), *pc);
+    //writePLY(os.str(), pc);
+    //std::cout << cloud_count%THREAD_COUNT << std::endl;
+    //threads[cloud_count%THREAD_COUNT] = std::thread(writePLY, os.str(), pc);
+    //pool.push(writePLY, os.str(), pc);
   }));
 
   signal(SIGINT, quit);

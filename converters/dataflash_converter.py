@@ -24,7 +24,7 @@ def convert_dataflash_to_json(dataflash_file, outfile, sectionfile):
     msg_type = mavmsg.get_type()
     msg = mavmsg.to_dict()
         
-    if msg_type == 'GPS' and msg['Status'] > 3 and boot_time == -1:
+    if msg_type == 'GPS' and msg['Status'] > 1 and boot_time == -1:
       # GPS Status can be:
       # 0 - no gps
       # 1 - gps detected, but no lock
@@ -34,7 +34,7 @@ def convert_dataflash_to_json(dataflash_file, outfile, sectionfile):
       # 5 - 3D RTK Float
       # 6 - 3D RTK Fixed
       # Since we only need time, status can be anything above 1
-      print("Found first good (status > 3) GPS message")
+      print("Found first good (status > 1) GPS message")
       print("GPS time is: %f" % gps2utc(msg['GMS']/1000., msg['GWk']))
       print("Uptime(uS) is: %d" % msg['TimeUS'])
       boot_time = gps2utc(msg['GMS']/1000., msg['GWk']) - msg['TimeUS']/1000000.
@@ -60,7 +60,7 @@ def convert_dataflash_to_json(dataflash_file, outfile, sectionfile):
       stamp = boot_time + msg['TimeUS'] / 1000000.
       if msg_type not in data:
         data[msg_type] = {}
-      if last_status > 5:
+      if last_status > 1:
         data[msg_type][stamp] = msg
     mavmsg = mavmaster.recv_msg()
   with open(outfile, 'w') as f:

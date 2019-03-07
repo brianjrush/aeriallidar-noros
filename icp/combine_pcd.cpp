@@ -1,4 +1,5 @@
 #include <iostream>
+#include <string>
 #include <pcl/point_types.h>
 #include <pcl/registration/icp.h>
 #include <pcl/io/ply_io.h>
@@ -8,16 +9,20 @@
 #include <pcl/common/common.h>
 
 int main(int argc, char** argv) {
-  pcl::PointCloud<pcl::PointXYZ>::Ptr combinedCloud (new pcl::PointCloud<pcl::PointXYZ>);
-  pcl::PointCloud<pcl::PointXYZ>::Ptr next (new pcl::PointCloud<pcl::PointXYZ>);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr combinedCloud (new pcl::PointCloud<pcl::PointXYZRGB>);
+  pcl::PointCloud<pcl::PointXYZRGB>::Ptr next (new pcl::PointCloud<pcl::PointXYZRGB>);
   //pcl::PointCloud<pcl::PointXYZ>::Ptr next_filtered (new pcl::PointCloud<pcl::PointXYZ>);
-  std::string output = "output.ply";
+  std::string output = "output";
+  int size = -1;
   int idx = pcl::console::parse_argument(argc, argv, "-o", output);
+  pcl::console::parse_argument(argc, argv, "-s", size);
   std::vector<int> pcdIndices = pcl::console::parse_file_extension_argument(argc, argv, "pcd");
   std::vector<int> plyIndices = pcl::console::parse_file_extension_argument(argc, argv, "ply");
 
   std::cout << "Found " << pcdIndices.size() << " pcd files" << std::endl;
   std::cout << "Found " << plyIndices.size() << " ply files" << std::endl;
+  int start = 0;
+  int count = 1;
   for (int i = 0; i < pcdIndices.size(); i++) {
     pcl::io::loadPCDFile(argv[pcdIndices[i]], *next);
 //    pcl::PointXYZ min;
@@ -31,6 +36,7 @@ int main(int argc, char** argv) {
 
     *combinedCloud += *next;
     std::cout << i << " - " << combinedCloud->size() << std::endl;
+    count++;
   }
   
   std::cout << idx << std::endl;
@@ -43,6 +49,13 @@ int main(int argc, char** argv) {
     pcl::io::loadPLYFile(argv[plyIndices[i]], *next);
     *combinedCloud += *next;
     std::cout << i << " - " << combinedCloud->size() << std::endl;
+    if (size != -1 && count % size == 0) {
+      pcl::io::savePLYFileBinary(output+"-"+std::to_string(start)+"-"+std::to_string(start+count)+".ply", *combinedCloud);
+      start = start + count;
+      combinedCloud->clear();
+      count = 0;
+    }
+    count++;
   }
   
 
@@ -59,6 +72,7 @@ int main(int argc, char** argv) {
   //std::cout <<"has converged:" << icp.hasConverged() << " score: " << icp.getFitnessScore() << std::endl;
   //std::cout << icp.getFinalTransformation() << std::endl;
 
-  pcl::io::savePLYFileBinary(output, *combinedCloud);
+  //pcl::io::savePLYFileBinary(output, *combinedCloud);
+  pcl::io::savePLYFileBinary(output+"-"+std::to_string(start)+"-"+std::to_string(start+count)+".ply", *combinedCloud);
   return 0;
 }

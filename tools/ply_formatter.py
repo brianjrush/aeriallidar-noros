@@ -3,8 +3,9 @@
 import struct
 import pointclouds.pointcloud as pointcloud
 from math import isnan
+import os
 
-def read(infile, min_rgb=0, strip_min=False):
+def read(infile, min_rgb=0, strip_min=False, use_filename=False):
   malformed = True
 
   ply_types = {'float' : 'f',
@@ -115,6 +116,8 @@ def read(infile, min_rgb=0, strip_min=False):
     start = timestamp['seek_position']
     fields = timestamp_parser.unpack(bin_data[start:start+timestamp_parser.size])
     cloud.stamp = fields[0]
+  elif use_filename:
+    cloud.stamp = int(os.path.basename(infile).split('_')[0])/1000000
   return cloud
 
 def pack_point(point):
@@ -149,4 +152,4 @@ def write(cloud, outfile):
   f.close()
 
 if __name__ == '__main__':
-  cloud=read('/home/e4e/testclouds/new/03394.ply')
+  cloud=read('/home/e4e/aeriallidar-noros/transformer/1549055576168992_05587.ply')

@@ -61,8 +61,8 @@ def parse_gps(infile, outfile):
     vert_accuracy = message[5]
     stamp = gps2utc(message[6], message[7])
     flags = message[8]
-    data[stamp] = {'latitude': lat,
-                   'longitute': lng,
+    data[stamp] = {'lat': lat,
+                   'lon': lng,
                    'ellipsoid_height': ellipsoid_height,
                    'msl_height': msl_height,
                    'horizontal_accuracy': horiz_accuracy,
@@ -72,5 +72,6 @@ def parse_gps(infile, outfile):
     json.dump(data, f, indent=2)
 
 if __name__ == '__main__':
-  parse_ahrs("ahrs.bin", "ahrs.json")
-  parse_gps("gps.bin", "gps.json")
+  
+  parse_ahrs(sys.argv[1]+ "/ahrs.bin", sys.argv[1]+"/ahrs.json")
+  parse_gps(sys.argv[1]+ "/gps.bin", sys.argv[1]+"/gps.json")
